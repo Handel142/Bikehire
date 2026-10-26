@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b3ec9">
+<title>Staff login</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="theme-early.js"></script>
+</head>
+<body class="auth">
+<main class="auth-wrap">
+  <a class="auth-brand" href="index.html"><span id="authLogo"></span><span id="authName">Bike hire</span></a>
+  <form class="auth-card" id="loginForm" autocomplete="on">
+    <h1>Staff login</h1>
+    <p class="err" id="err" role="alert" hidden></p>
+    <label>Email
+      <input name="email" type="email" autocomplete="username" autocapitalize="none" required autofocus>
+    </label>
+    <label>Password
+      <input name="password" type="password" autocomplete="current-password" required>
+    </label>
+    <button class="btn primary block" type="submit">Log in</button>
+    <p class="muted small center"><a href="index.html">Back to the website</a></p>
+  </form>
+</main>
+<div id="toasts" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="auth.js"></script>
+</body>
+</html>

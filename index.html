@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b3ec9">
+<title>Bicycle hire</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="theme-early.js"></script>
+</head>
+<body class="site">
+<div id="topbar"></div>
+<section class="hero">
+  <div class="hero-in">
+    <div>
+      <h1 id="heroTitle">Grab a bike.<br>Ride by the hour.</h1>
+      <p id="heroText">Quick bicycle hire for students. Pick a bike, ride, and bring it back on time.</p>
+      <a class="btn primary" id="bookBtn" href="book.html" hidden>Book a bike</a>
+      <a class="btn outline" id="callBtn" href="#" hidden>Call</a>
+      <a class="btn outline" href="#how">How it works</a>
+    </div>
+    <div class="hero-art">
+      <div class="tag" id="priceTag"><b>KSh 50</b><span>per hour</span></div>
+      <svg class="bike-art" viewBox="0 0 640 340" role="img" aria-label="Illustration of a bicycle">
+        <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <g class="spokes" stroke-width="2">
+            <path d="M170 154v172M84 240h172M109 179l122 122M231 179L109 301"/>
+            <path d="M470 154v172M384 240h172M409 179l122 122M531 179L409 301"/>
+          </g>
+          <circle class="wheel" cx="170" cy="240" r="86" stroke-width="10"/>
+          <circle class="wheel" cx="470" cy="240" r="86" stroke-width="10"/>
+          <g class="frame" stroke-width="10">
+            <path d="M170 240L300 240L262 135Z"/>
+            <path d="M262 135L420 130L300 240"/>
+            <path d="M420 130L470 240"/>
+            <path d="M262 135L257 112M236 110h42"/>
+            <path d="M420 130L412 102M396 98l46 -4l12 14"/>
+            <path d="M300 240l14 40M300 240l-14 -40"/>
+          </g>
+          <circle class="wheel" cx="300" cy="240" r="15" stroke-width="7"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="how">
+  <h2 id="howTitle">How it works</h2>
+  <ol class="steps" id="steps"></ol>
+</section>
+
+<section class="section" id="newsSec" hidden style="padding-top:0">
+  <h2 id="newsTitle">News and offers</h2>
+  <div class="news-grid" id="news"></div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="rules">
+    <h2 id="priceTitle">Price</h2>
+    <p id="priceMain"></p>
+    <div id="priceText"></div>
+  </div>
+</section>
+
+<section class="section" id="where" style="padding-top:0" hidden>
+  <h2>Find us</h2>
+  <div class="where" id="whereBox"></div>
+</section>
+
+<footer class="footer">
+  <div class="section">
+    <div id="footInfo"></div>
+    <p><a href="login.html">Staff login</a></p>
+  </div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="site.js"></script>
+</body>
+</html>

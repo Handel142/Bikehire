@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b3ec9">
+<title>Account</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="theme-early.js"></script>
+</head>
+<body class="">
+<div id="topbar"></div>
+<main class="wrap narrow">
+  <h1>Your account</h1>
+  <p class="muted" id="who"></p>
+  <form class="panel" id="pwForm" autocomplete="off">
+    <h2>Change password</h2>
+    <p class="err" id="err" role="alert" hidden></p>
+    <p class="ok" id="okmsg" role="status" hidden></p>
+    <label>Current password<input name="current" type="password" autocomplete="current-password" required></label>
+    <label>New password (at least 8 characters)<input name="new" type="password" autocomplete="new-password" minlength="8" required></label>
+    <label>Repeat new password<input name="new2" type="password" autocomplete="new-password" required></label>
+    <button class="btn primary" type="submit">Change password</button>
+  </form>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="auth.js"></script>
+</body>
+</html>

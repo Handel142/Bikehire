@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b3ec9">
+<title>Set up</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="theme-early.js"></script>
+</head>
+<body class="auth">
+<main class="auth-wrap">
+  <a class="auth-brand" href="index.html"><span id="authLogo"></span><span id="authName">Bike hire</span></a>
+  <form class="auth-card" id="setupForm" autocomplete="off">
+    <h1>Create the master admin</h1>
+    <p class="muted">This account registers the people who lease out bikes. This page works only once, and only with your secret setup code.</p>
+    <p class="err" id="err" role="alert" hidden></p>
+    <label>Setup code (the secret you typed in the database script)
+      <input name="setup_code" type="password" required autocomplete="off">
+    </label>
+    <label>Business name
+      <input name="business_name" value="Campus Bike Hire" maxlength="60" required>
+    </label>
+    <label>Your name
+      <input name="display_name" maxlength="60" required>
+    </label>
+    <label>Your email
+      <input name="email" type="email" autocapitalize="none" required autocomplete="off">
+    </label>
+    <label>Password (at least 8 characters)
+      <input name="password" type="password" autocomplete="new-password" required minlength="8">
+    </label>
+    <label>Repeat password
+      <input name="password2" type="password" autocomplete="new-password" required>
+    </label>
+    <button class="btn primary block" type="submit">Create admin and continue</button>
+  </form>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="auth.js"></script>
+</body>
+</html>

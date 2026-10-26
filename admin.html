@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b3ec9">
+<title>Master admin</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="theme-early.js"></script>
+</head>
+<body class="dash">
+<div id="topbar"></div>
+<main class="wrap">
+  <h1>Master admin</h1>
+  <p class="clock" id="clock"></p>
+  <div class="tabs" id="atabs" role="tablist" aria-label="Admin sections">
+    <button type="button" class="tab" role="tab" data-tab="live" aria-selected="true">Live</button>
+    <button type="button" class="tab" role="tab" data-tab="req" aria-selected="false">Requests</button>
+    <button type="button" class="tab" role="tab" data-tab="ops" aria-selected="false">Operators</button>
+    <button type="button" class="tab" role="tab" data-tab="hist" aria-selected="false">History</button>
+    <button type="button" class="tab" role="tab" data-tab="web" aria-selected="false">Website</button>
+    <button type="button" class="tab" role="tab" data-tab="set" aria-selected="false">Settings</button>
+  </div>
+
+  <section id="p-live"><div class="stats" id="astats"></div><div id="liveList"></div></section>
+
+  <section id="p-req" hidden><p class="muted small">Booking requests from students, from all pick-up points.</p><div id="reqList"></div></section>
+
+  <section id="p-ops" hidden>
+    <form class="panel" id="opForm" autocomplete="off">
+      <h2>Register an operator</h2>
+      <p class="muted">Operators lease out the bikes. Give them the email and password you set here.</p>
+      <p class="err" id="opErr" role="alert" hidden></p>
+      <div class="fgrid">
+        <label>Name<input name="display_name" maxlength="60" required></label>
+        <label>Email (they log in with it)<input name="email" type="email" autocapitalize="none" required></label>
+        <label>Phone (optional)<input name="phone" type="tel" inputmode="tel" maxlength="20"></label>
+        <label>Pick-up name shown to students (optional)<input name="stand" maxlength="60" placeholder="For example: Main gate"></label>
+        <label>Password (at least 8 characters)<input name="password" type="text" minlength="8" autocomplete="off" required></label>
+      </div>
+      <button class="btn primary" type="submit">Register operator</button>
+    </form>
+    <h2>Operators</h2>
+    <div id="opList"></div>
+  </section>
+
+  <section id="p-hist" hidden></section>
+
+  <section id="p-web" hidden><p class="muted">Loading...</p></section>
+
+  <section id="p-set" hidden>
+    <form class="panel" id="setForm" autocomplete="off">
+      <h2>Business settings</h2>
+      <div class="fgrid">
+        <label>Business name<input name="business_name" maxlength="60" required></label>
+        <label>Currency label<input name="currency" maxlength="8" required></label>
+        <label>Price per hour<input name="rate" type="number" min="1" max="100000" step="1" required></label>
+        <label>Grace minutes before an extra hour is charged<input name="grace_minutes" type="number" min="0" max="60" step="1" required></label>
+        <label>Time zone<input name="timezone" required placeholder="Africa/Nairobi"></label>
+      </div>
+      <p class="muted small">A new price applies to bikes leased from now on. Rentals already out keep the price they started with.</p>
+      <p class="err" id="setErr" role="alert" hidden></p>
+      <button class="btn primary" type="submit">Save settings</button>
+    </form>
+  </section>
+</main>
+<div id="toasts" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="backend.js"></script>
+<script src="app.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

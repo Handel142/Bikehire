@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b3ec9">
+<title>Book a bike</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="theme-early.js"></script>
+</head>
+<body class="site">
+<div id="topbar"></div>
+<main class="wrap">
+  <div class="formcard" id="bookCard">
+    <h1>Book a bike</h1>
+    <p class="muted" id="bookIntro"></p>
+    <div id="closed" class="err" hidden>Online booking is closed right now. Please call us.</div>
+    <form id="bookForm" autocomplete="on">
+      <label id="standRow">Where will you pick it up?<select name="stand" required></select></label>
+      <label>Your full name<input name="name" maxlength="80" required autocomplete="name"></label>
+      <label>Registration number<input name="reg" maxlength="40" required autocapitalize="characters"></label>
+      <label>Phone number<input name="phone" type="tel" inputmode="tel" maxlength="20" required autocomplete="tel"></label>
+      <div class="fgrid">
+        <label>Day<input name="date" type="date" required></label>
+        <label>Time you will come (optional)<input name="time" type="time"></label>
+      </div>
+      <label>How long?<select name="minutes">
+        <option value="30">30 minutes</option><option value="60" selected>1 hour</option><option value="90">1 hour 30 minutes</option>
+        <option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option>
+        <option value="360">6 hours</option><option value="480">8 hours</option></select></label>
+      <label>Anything we should know? (optional)<textarea name="note" rows="2" maxlength="300"></textarea></label>
+      <div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div>
+      <p class="err" id="bookErr" role="alert" hidden></p>
+      <button class="btn primary block" type="submit" id="bookGo">Send my request</button>
+      <p class="muted small center" style="margin-top:10px">You do not need an account. After sending, you get a code. Use it to see if you were allowed to have a bike on your day.</p>
+    </form>
+    <div id="bookDone" hidden>
+      <h2>Request sent</h2>
+      <p>Save this code. You need it to see the answer.</p>
+      <div class="codebox"><span class="small">Your code</span><b id="doneCode"></b></div>
+      <div class="row" style="justify-content:flex-start">
+        <button class="btn" type="button" id="copyCode">Copy code</button>
+        <a class="btn primary" id="seeStatus" href="status.html">Check my answer</a>
+      </div>
+      <p class="muted small">We saved the code on this phone too, so you can find it again on the &ldquo;Check my answer&rdquo; page.</p>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="book.js"></script>
+</body>
+</html>

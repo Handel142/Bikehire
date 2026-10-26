@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#1b3ec9">
+<title>Check my booking</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+<script src="theme-early.js"></script>
+</head>
+<body class="site">
+<div id="topbar"></div>
+<main class="wrap">
+  <div class="formcard">
+    <h1>Check my booking</h1>
+    <form id="codeForm" autocomplete="off">
+      <label>Your code<input name="code" maxlength="8" required autocapitalize="characters" placeholder="For example K7M3QX9A" style="text-transform:uppercase;letter-spacing:.1em;font-weight:800"></label>
+      <button class="btn primary block" type="submit">Check</button>
+    </form>
+    <p class="err" id="stErr" role="alert" hidden></p>
+    <div id="result" aria-live="polite"></div>
+    <div id="mine" hidden><h3 style="margin-top:20px">Codes saved on this phone</h3><ul class="mycodes" id="mineList"></ul></div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script src="status.js"></script>
+</body>
+</html>
