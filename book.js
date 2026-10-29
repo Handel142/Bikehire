@@ -29,6 +29,14 @@
     return m || 'Something went wrong. Try again.';
   }
 
+  var stands = [];
+  function showPrice() {
+    var el = $('bookPrice'); if (!el) { return; }
+    var sel = form.elements.stand, x = null, mins = parseInt(form.elements.minutes.value, 10);
+    stands.forEach(function (y) { if (y.id === sel.value) { x = y; } });
+    if (!x || !(mins > 0)) { el.textContent = ''; return; }
+    el.textContent = 'Price for this booking: ' + BH.currency + ' ' + BH.bookedPrice(x.rate, mins).toLocaleString('en-US') + '. You pay for the full time you book, even if you return early. Extra time after the grace period is charged at ' + BH.currency + ' ' + x.rate + ' per hour.';
+  }
   BH.sb.rpc('public_stands').then(function (r) {
     var sel = form.elements.stand, list = (r && r.data) || [];
     if (!list.length) {
@@ -37,8 +45,16 @@
       showErr('Booking is not ready yet. Please call us.');
       return;
     }
-    sel.innerHTML = list.map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.label) + '</option>'; }).join('');
+    sel.innerHTML = list.map(function (x) {
+      var free = x.free || 0;
+      return '<option value="' + esc(x.id) + '">' + esc(x.label) + ' - ' + esc(BH.currency + ' ' + x.rate) + '/hour - ' + (free ? free + ' free' : 'none free now') + '</option>';
+    }).join('');
+    var want = /[?&]stand=([0-9a-f-]{36})/i.exec(location.search);
+    if (want && list.some(function (x) { return x.id === want[1]; })) { sel.value = want[1]; }
     if (list.length === 1) { $('standRow').hidden = true; }
+    stands = list; showPrice();
+    sel.addEventListener('change', showPrice);
+    form.elements.minutes.addEventListener('change', showPrice);
   }, function () { showErr('No connection. Check your internet and refresh.'); });
 
   form.addEventListener('submit', function (e) {

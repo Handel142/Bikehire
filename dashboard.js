@@ -9,9 +9,9 @@
     natCmp = U.natCmp, liveAttrs = U.liveAttrs, thumbHtml = U.thumbHtml, syncClock = U.syncClock;
 
   $('#hello').textContent = 'Hello, ' + me.display_name;
-  var S = null, filter = 'all', findText = '', view = 'bikes', history = null;
+  var S = null, filter = 'all', findText = '', view = 'bikes', history = null, showAll = false, LIMIT = 6;
   var grid = $('#grid'), tabsEl = $('#tabs'), historyEl = $('#history'), alertEl = $('#alert'), statsEl = $('#stats');
-  var reqEl = $('#requests'), netEl = $('#netbar');
+  var reqEl = $('#requests'), netEl = $('#netbar'), standEl = $('#standLine'), parkedEl = $('#parked');
   var baseTitle = document.title;
 
   statsEl.innerHTML = '<div class="stat"><b id="st-free">0</b><span>Free bikes</span></div>'
@@ -25,7 +25,7 @@
     S.bikes.forEach(function (b) {
       var s = statusOf(b.rental);
       c.all++;
-      if (s === 'free') { c.free++; } else { c.out++; if (s === 'late') { c.late++; } }
+      if (s === 'free') { if (!b.out_of_service) { c.free++; } } else { c.out++; if (s === 'late') { c.late++; } }
     });
     return c;
   }
@@ -98,21 +98,123 @@
 
   function cardHtml(b) {
     var r = b.rental, s = statusOf(r);
+    var broken = !r && b.out_of_service;
     var top = '<div class="card-top"><div class="bike-no"><small>Bike</small>' + esc(b.number) + '</div>'
-      + '<span class="pill ' + s + '">' + (s === 'free' ? 'Free' : s === 'late' ? 'Overdue' : 'Out') + '</span></div>';
+      + (broken ? '<span class="pill broken">Out of service</span>'
+        : '<span class="pill ' + s + '">' + (s === 'free' ? 'Free' : s === 'late' ? 'Overdue' : 'Out') + '</span>') + '</div>';
     if (!r) {
+      if (broken) {
+        return '<article class="card free broken">' + top
+          + (b.service_note ? '<div class="meta">' + esc(b.service_note) + '</div>' : '')
+          + '<div class="actions"><button class="btn primary" data-act="fixed" data-bike="' + esc(b.id) + '">Back in service</button></div></article>';
+      }
       return '<article class="card free">' + top
         + '<div class="actions"><button class="btn primary" data-act="lease" data-bike="' + esc(b.id) + '">Lease this bike</button>'
+        + '<button class="btn ghost small" style="flex:0 0 auto" data-act="broken" data-bike="' + esc(b.id) + '">Broken?</button>'
         + '<button class="btn ghost small" style="flex:0 0 auto" data-act="remove" data-bike="' + esc(b.id) + '" aria-label="Remove bike ' + esc(b.number) + '">Remove</button></div></article>';
     }
     return '<article class="card ' + s + '"' + liveAttrs(r) + '>' + top
       + '<div class="who"><span class="thumb">' + thumbHtml(r, '') + '</span>'
       + '<button type="button" class="who-text who-btn" data-act="details" data-rental="' + esc(r.id) + '" aria-label="Open details for ' + esc(r.name) + '"><b>' + esc(r.name) + '</b><div class="meta">' + esc(r.reg) + (r.phone ? ' · ' + esc(r.phone) : '') + '</div></button></div>'
       + '<div class="timer"><span class="t-label"></span><span class="t-val"></span></div>'
-      + '<div class="meta">Out ' + esc(fmtTime(r.start)) + ' · due ' + esc(fmtTime(r.due)) + (r.pending ? ' · <b>waiting to send</b>' : '') + '<br>Owes <b class="amt"></b> so far</div>'
+      + '<div class="meta">Out ' + esc(fmtTime(r.start)) + ' · due ' + esc(fmtTime(r.due)) + (r.pending ? ' · <b>waiting to send</b>' : '') + '<br>Owes <b class="amt"></b> so far<span class="over"></span></div>'
       + '<div class="actions"><button class="btn primary" data-act="return" data-rental="' + esc(r.id) + '">Return</button>'
       + '<button class="btn" data-act="extend" data-rental="' + esc(r.id) + '">Add time</button></div></article>';
   }
+
+  /* the pick-up point line: name, price, edit */
+  function renderStand() {
+    if (!S || !S.stand) { standEl.hidden = true; return; }
+    var st = S.stand;
+    standEl.hidden = false;
+    standEl.innerHTML = '<div><b>' + esc(st.name) + '</b> &middot; ' + esc(BH.currency + ' ' + Number(st.rate).toLocaleString('en-US')) + ' per hour'
+      + (st.rate_own == null ? ' <span class="muted small">(standard price)</span>' : '')
+      + (S.team && S.team.length > 1 ? '<div class="muted small">Working here: ' + esc(S.team.join(', ')) + '</div>' : '')
+      + (S.updated ? '' : '') + '</div><button type="button" class="btn small" id="editStand">Edit</button>';
+    $('#editStand').addEventListener('click', openStand);
+  }
+
+  function openStand() {
+    var st = S.stand;
+    var lat = st.lat, lng = st.lng;
+    var m = openModal('<form id="stForm" autocomplete="off"><h2>My pick-up point</h2>'
+      + '<label>Name<input name="name" maxlength="60" required value="' + esc(st.name) + '"></label>'
+      + '<label>Price per hour (' + esc(BH.currency) + ')<input name="rate" type="number" min="1" max="100000" step="1" inputmode="numeric" placeholder="Leave empty for the standard ' + esc(String(st.default_rate || BH.rate)) + '" value="' + (st.rate_own == null ? '' : esc(String(st.rate_own))) + '"></label>'
+      + '<p class="muted small">This is a price for one hour. If a student keeps the bike past the grace time, the extra time is charged at the same rate.</p>'
+      + '<label>Where is it? (words)<input name="address" maxlength="200" placeholder="Near the main gate" value="' + esc(st.address || '') + '"></label>'
+      + '<fieldset><legend>Map position (so students can find you)</legend>'
+      + '<div class="chips"><button type="button" class="btn small" id="useLoc">Use my location now</button><button type="button" class="btn small ghost" id="clrLoc">Clear</button></div>'
+      + '<label>or paste a Google Maps link<input name="link" placeholder="https://maps.app.goo.gl/... or -1.2921, 36.8219"></label>'
+      + '<p class="muted small" id="locState"></p></fieldset>'
+      + '<p class="err" id="stErr" role="alert" hidden></p>'
+      + '<div class="row"><button type="button" class="btn" data-close>Cancel</button><button class="btn primary" type="submit" id="stGo">Save</button></div></form>');
+    var form = $('#stForm', m), err = $('#stErr', m), locState = $('#locState', m);
+    function showLoc() { locState.textContent = lat != null && lng != null ? 'Saved position: ' + Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5) : 'No map position yet.'; }
+    showLoc();
+    $('#useLoc', m).addEventListener('click', function () {
+      if (!navigator.geolocation) { locState.textContent = 'This phone cannot share its location here.'; return; }
+      locState.textContent = 'Finding you...';
+      navigator.geolocation.getCurrentPosition(function (p) { lat = p.coords.latitude; lng = p.coords.longitude; showLoc(); },
+        function () { locState.textContent = 'Could not get your location. Allow location for this site, or paste a map link.'; },
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    });
+    $('#clrLoc', m).addEventListener('click', function () { lat = null; lng = null; showLoc(); });
+    form.elements.link.addEventListener('input', function () {
+      var pos = BH.parseMapLink(this.value);
+      if (pos) { lat = pos.lat; lng = pos.lng; showLoc(); }
+    });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      err.hidden = true;
+      var name = form.elements.name.value.trim(), rv = form.elements.rate.value.trim();
+      var rate = rv === '' ? null : parseInt(rv, 10);
+      if (name.length < 2) { err.textContent = 'Enter a name.'; err.hidden = false; return; }
+      if (rate !== null && !(rate >= 1)) { err.textContent = 'Enter a price of 1 or more, or leave it empty.'; err.hidden = false; return; }
+      if (form.elements.link.value.trim() && !BH.parseMapLink(form.elements.link.value) && lat == null) {
+        err.textContent = 'We could not read a position from that link. Try "Use my location now".'; err.hidden = false; return;
+      }
+      var go = $('#stGo', m); go.disabled = true;
+      api('update_stand', { body: { name: name, rate: rate, lat: lat, lng: lng, address: form.elements.address.value.trim() } }).then(function (res) {
+        go.disabled = false;
+        if (res.error) { err.textContent = res.error; err.hidden = false; return; }
+        closeModal(); toast('Saved.'); load();
+      });
+    });
+  }
+
+  /* leases that could not be sent are kept safe here until the operator decides */
+  function renderParked() {
+    BH.parkedList().then(function (list) {
+      if (!list.length) { parkedEl.hidden = true; parkedEl.innerHTML = ''; return; }
+      parkedEl.hidden = false;
+      parkedEl.innerHTML = '<h2>Needs your attention</h2><p class="muted small">These leases were saved on this phone but the server did not accept them. The photo and details are still safe here.</p>'
+        + list.map(function (x) {
+          return '<article class="parked-item"><div class="who">' + (x.photo ? '<span class="thumb"><img src="' + esc(x.photo) + '" alt=""></span>' : '')
+            + '<div class="who-text"><b>' + esc(x.name) + '</b><div class="meta">Bike ' + esc(x.bike) + ' &middot; ' + esc(x.reg) + '</div></div></div>'
+            + '<p class="err">' + esc(x.error) + '</p><div class="actions">'
+            + '<button class="btn" data-pk="retry" data-q="' + esc(String(x.qid)) + '">Try again</button>'
+            + (x.confirm ? '<button class="btn" data-pk="force" data-q="' + esc(String(x.qid)) + '">Lease anyway</button>' : '')
+            + '<button class="btn danger" data-pk="drop" data-q="' + esc(String(x.qid)) + '">Discard</button></div></article>';
+        }).join('');
+    }, function () { parkedEl.hidden = true; });
+  }
+  parkedEl.addEventListener('click', function (e) {
+    var el = e.target.closest ? e.target.closest('[data-pk]') : null;
+    if (!el) { return; }
+    var q = el.getAttribute('data-q'), act = el.getAttribute('data-pk');
+    var qid = /^\d+$/.test(q) ? parseInt(q, 10) : q;
+    if (act === 'drop') {
+      if (!window.confirm('Discard this lease for good? The photo and details will be deleted from this phone.')) { return; }
+      BH.discardParked(qid).then(function () { toast('Discarded.'); load(); });
+      return;
+    }
+    el.disabled = true;
+    BH.retryParked(qid, act === 'force').then(function (res) {
+      el.disabled = false;
+      if (res.error) { toast(res.error, 'err'); } else { toast(res.queued ? 'Saved. Will send when online.' : 'Lease sent.'); }
+      load();
+    });
+  });
 
   function render() {
     if (!S) { return; }
@@ -120,11 +222,13 @@
     updateAlert(c);
     renderTabs(c);
     renderNet();
+    renderStand();
     if (view === 'requests') { renderRequests(); return; }
     if (view === 'history') { return; }
     var ft = findText.toLowerCase();
     var list = S.bikes.filter(function (b) {
       var s = statusOf(b.rental);
+      if (filter === 'free' && b.out_of_service) { return false; }
       if (filter === 'out' && s === 'free') { return false; }
       if (filter === 'late' && s !== 'late') { return false; }
       if (filter === 'free' && s !== 'free') { return false; }
@@ -141,8 +245,12 @@
       if (a.rental && b.rental) { return a.rental.due - b.rental.due; }
       return natCmp(a.number, b.number);
     });
+    var total = list.length, cut = !showAll && !ft && total > LIMIT;
+    if (cut) { list = list.slice(0, LIMIT); }
     if (list.length) {
-      grid.innerHTML = list.map(cardHtml).join('');
+      grid.innerHTML = list.map(cardHtml).join('')
+        + (cut ? '<div class="viewall"><button type="button" class="btn" data-act="viewall">View all ' + total + ' bikes</button></div>'
+          : (showAll && !ft && total > LIMIT ? '<div class="viewall"><button type="button" class="btn ghost" data-act="viewless">Show fewer bikes</button></div>' : ''));
     } else if (!S.bikes.length) {
       grid.innerHTML = '<div class="empty"><h2>Add your bikes to start</h2><p class="muted">Type each bike number once, for example 1-10.</p><button class="btn primary" data-act="addbikes">Add bikes</button></div>';
     } else {
@@ -152,7 +260,13 @@
   }
   BH.onFlip = render;
 
+  var firstPaint = false;
   function load() {
+    if (!S && !firstPaint) {
+      firstPaint = true;
+      api('cached_state').then(function (c) { if (c && c.bikes && !S) { syncClock(c.now); S = c; render(); } });
+    }
+    renderParked();
     return api('state').then(function (res) {
       if (res.auth) { toast('Please log in again to send your saved changes.', 'err'); return; }
       if (res.error) { if (!S) { toast(res.error, 'err'); } return; }
@@ -170,7 +284,7 @@
     for (var i = 0; i < S.bikes.length; i++) { if (S.bikes[i].rental && S.bikes[i].rental.id === id) { return S.bikes[i].rental; } }
     return null;
   }
-  function freeBikes() { return S.bikes.filter(function (b) { return !b.rental; }); }
+  function freeBikes() { return S.bikes.filter(function (b) { return !b.rental && !b.out_of_service; }); }
 
   /* ----- lease ----- */
   function openLease(bikeId, prefill) {
@@ -201,6 +315,7 @@
       + '<input id="photoFile" type="file" accept="image/*" hidden></div></div>'
       + '<label>Full name<input name="renter_name" maxlength="80" required autocomplete="off" value="' + esc(prefill.name || '') + '"></label>'
       + '<label>Registration number<input name="reg_no" maxlength="40" required autocomplete="off" autocapitalize="characters" value="' + esc(prefill.reg || '') + '"></label>'
+      + '<p class="flagline" id="flagMsg" hidden></p>'
       + '<label>Phone (optional)<input name="phone" type="tel" inputmode="tel" maxlength="20" autocomplete="off" value="' + esc(prefill.phone || '') + '"></label>'
       + '<fieldset><legend>How long?</legend><div class="chips">' + chips + '</div></fieldset>'
       + '<div class="summary" id="sum"></div><p class="err" id="err" role="alert" hidden></p>'
@@ -211,7 +326,7 @@
     function updateSum() {
       var ok = minutes >= 15 && minutes <= 1440;
       sum.textContent = ok
-        ? money(Math.ceil(minutes / 60) * BH.rate) + ' for ' + U.fmtMin(minutes) + '. Due back ' + fmtTime(now() + minutes * 60) + '.'
+        ? money(BH.bookedPrice(S.stand ? S.stand.rate : BH.rate, minutes)) + ' for ' + U.fmtMin(minutes) + '. Due back ' + fmtTime(now() + minutes * 60) + '.'
         : 'Enter minutes from 15 to 1440.';
     }
     updateSum();
@@ -225,6 +340,17 @@
       });
     });
     other.addEventListener('input', function () { minutes = parseInt(other.value, 10) || 0; updateSum(); });
+
+    var flagTimer = null, flagMsg = $('#flagMsg', m);
+    function checkFlag() {
+      var v = form.elements.reg_no.value.trim();
+      if (v.length < 2) { flagMsg.hidden = true; return; }
+      api('reg_flag', { body: { reg: v } }).then(function (r) {
+        if (r && r.note) { flagMsg.textContent = '\u26A0 Warning list: ' + r.note; flagMsg.hidden = false; } else { flagMsg.hidden = true; }
+      });
+    }
+    form.elements.reg_no.addEventListener('input', function () { clearTimeout(flagTimer); flagTimer = setTimeout(checkFlag, 500); });
+    if (prefill.reg) { checkFlag(); }
 
     function showPreview(blob) {
       var img = document.createElement('img');
@@ -268,6 +394,7 @@
           if (window.confirm(res.error + '\n\nLease this bike anyway?')) { payload.force = true; send(payload, name, number); }
           return;
         }
+        if (res.busy) { setErr(res.error + ' Another phone may have just leased it.'); load(); return; }
         if (res.error) { setErr(res.error); return; }
         closeModal();
         toast(res.queued ? 'Bike ' + number + ' leased to ' + name + '. Saved on this phone, will send when online.' : 'Bike ' + number + ' leased to ' + name + '.');
@@ -301,15 +428,19 @@
   function openReturn(rid) {
     var r = findRental(rid);
     if (!r) { return; }
-    var t = now(), late = t > r.due;
+    var t = now(), late = t > r.due, v2 = r.billing === 'v2';
+    var total = U.amountNow(r), base = v2 ? BH.baseFor(r) : total, extra = v2 ? Math.max(0, total - base) : 0;
+    var early = t < r.due;
     var m = openModal(
       '<h2>Return bike ' + esc(r.bike) + '</h2>'
       + '<div class="who" style="margin-bottom:8px">' + (r.has_photo ? '<span class="thumb">' + thumbHtml(r, '') + '</span>' : '')
       + '<div class="who-text"><b>' + esc(r.name) + '</b><div class="meta">' + esc(r.reg) + '</div></div></div>'
       + '<dl class="dl"><dt>Taken</dt><dd>' + esc(fmtTime(r.start)) + '</dd><dt>Due back</dt><dd>' + esc(fmtTime(r.due)) + '</dd>'
       + '<dt>Time used</dt><dd>' + esc(fmtDur(t - r.start)) + '</dd>'
-      + (late ? '<dt>Late by</dt><dd style="color:var(--red)">' + esc(fmtDur(t - r.due)) + '</dd>' : '') + '</dl>'
-      + '<div class="collect"><span>Collect</span><b>' + esc(money(U.amountNow(r))) + '</b></div>'
+      + (late ? '<dt>Late by</dt><dd style="color:var(--red)">' + esc(fmtDur(t - r.due)) + '</dd>' : '')
+      + (v2 ? '<dt>Booked time</dt><dd>' + esc(money(base)) + '</dd>' + (extra ? '<dt>Overtime</dt><dd>' + esc(money(extra)) + '</dd>' : '') : '') + '</dl>'
+      + '<div class="collect"><span>Collect</span><b>' + esc(money(total)) + '</b></div>'
+      + (v2 && early ? '<p class="muted small">Returned early. The full booked time is paid.</p>' : '')
       + '<p class="muted small">The final amount is set when you confirm.</p>'
       + '<div class="row"><button class="btn" data-close>Cancel</button><button class="btn primary" id="confirmRet">Confirm return</button></div>'
     );
@@ -317,11 +448,13 @@
     btn.addEventListener('click', function () {
       btn.disabled = true;
       btn.textContent = 'Saving...';
-      var at = now(), hrs = U.billable(r.start, at, r.grace);
-      var local = { amount: hrs * r.rate, hours: hrs, bike: r.bike, name: r.name, late: Math.max(0, Math.floor(at - r.due)) };
+      var at = now(), amt = BH.amountFor(r, at), bs = BH.baseFor(r);
+      var local = { amount: amt, base: bs, extra: r.billing === 'v2' ? Math.max(0, amt - bs) : 0, billing: r.billing, bike: r.bike, name: r.name, late: Math.max(0, Math.floor(at - r.due)) };
       api('return', { body: { rental_id: rid, at: at, local: local } }).then(function (res) {
         if (res.error) { toast(res.error, 'err'); closeModal(); load(); return; }
-        openModal('<h2>Bike ' + esc(res.bike) + ' returned</h2><p>' + esc(res.name) + ' - billed for ' + res.hours + (res.hours === 1 ? ' hour' : ' hours') + '.</p>'
+        var ex = res.extra || 0, bd = res.base != null ? res.base : res.amount - ex;
+        openModal('<h2>Bike ' + esc(res.bike) + ' returned</h2><p>' + esc(res.name) + '</p>'
+          + (res.billing === 'v2' && ex ? '<dl class="dl"><dt>Booked time</dt><dd>' + esc(money(bd)) + '</dd><dt>Overtime</dt><dd>' + esc(money(ex)) + '</dd></dl>' : '')
           + '<div class="collect"><span>Collect</span><b>' + esc(money(res.amount)) + '</b></div>'
           + (res.queued ? '<p class="muted small">Saved on this phone. It will be sent when you are online.</p>' : '')
           + '<div class="row"><button class="btn primary" data-close autofocus>Done</button></div>');
@@ -432,6 +565,24 @@
     else if (act === 'extend') { openExtend(rid); }
     else if (act === 'details') { var r = findRental(rid); if (r) { U.openDetails(r); } }
     else if (act === 'addbikes') { openAddBikes(); }
+    else if (act === 'viewall') { showAll = true; render(); }
+    else if (act === 'viewless') { showAll = false; render(); }
+    else if (act === 'broken') {
+      var bb = findBike(bid);
+      var note = bb ? window.prompt('Bike ' + bb.number + ' cannot be leased until you put it back in service.\n\nWhat is wrong? (optional)', '') : null;
+      if (bb && note !== null) {
+        api('set_service', { body: { bike_id: bid, out: true, note: note } }).then(function (res) {
+          if (res.error) { toast(res.error, 'err'); return; }
+          toast('Bike ' + bb.number + ' marked out of service.'); load();
+        });
+      }
+    }
+    else if (act === 'fixed') {
+      api('set_service', { body: { bike_id: bid, out: false, note: '' } }).then(function (res) {
+        if (res.error) { toast(res.error, 'err'); return; }
+        toast('Bike is back in service.'); load();
+      });
+    }
     else if (act === 'remove') {
       var b = findBike(bid);
       if (b && window.confirm('Remove bike ' + b.number + ' from your list? Its past rentals stay in History.')) {
@@ -468,7 +619,7 @@
   $('#addBikes').addEventListener('click', openAddBikes);
 
   load();
-  setInterval(load, 20000);
+  setInterval(function () { if (!document.hidden) { load(); } }, 10000);
   document.addEventListener('visibilitychange', function () { if (!document.hidden) { load(); } });
   window.addEventListener('online', function () { setTimeout(load, 500); });
   });

@@ -33,11 +33,18 @@
     how_title: 'How it works',
     step1_title: 'Choose a bike', step1_text: 'Pick any free bike from the stand and tell the attendant how long you want it.',
     step2_title: 'Give your details', step2_text: 'The attendant notes your name and registration number and takes a quick photo. That is how every bike stays accounted for.',
-    step3_title: 'Ride and return on time', step3_text: 'Your time starts when you leave. Bring the bike back by the time written down and pay for the hours you used.',
+    step3_title: 'Ride and return on time', step3_text: 'Your time starts when you leave. Bring the bike back by the time written down and pay for the time you booked.',
     price_title: 'Price',
-    price_text: 'You pay by the hour, rounded up.\nIf you keep the bike past your time, each extra hour costs the same.\nBring your student registration number each time you hire.',
+    price_text: 'You pay for the time you book, at the hourly price.\nIf you keep the bike past your time and the grace period, the extra time is charged at the same hourly rate.\nBring your student registration number each time you hire.',
     news_title: 'News and offers', footer_text: '', logo_path: '',
-    color_primary: '', color_accent: '', color_header: '', color_page: ''
+    color_primary: '', color_accent: '', color_header: '', color_page: '',
+    header_note: '', header_note_link: '', footer_about: '',
+    flink1_text: '', flink1_url: '', flink2_text: '', flink2_url: '', flink3_text: '', flink3_url: '',
+    social_instagram: '', social_facebook: '', social_tiktok: '', social_youtube: '',
+    hero_art: 'default', hero_image: '', finder_title: 'Find bikes near you', finder_on: '1',
+    services_title: 'Other things we offer', services_intro: '',
+    popup_on: '0', popup_title: '', popup_body: '', popup_image: '', popup_video: '', popup_video_file: '',
+    popup_btn_text: '', popup_btn_link: '', popup_start: '', popup_end: '', popup_freq: 'daily', popup_delay: '2', popup_rev: ''
   };
   BH.defaults = DEFAULTS;
   BH.settings = Object.assign({}, DEFAULTS, lsGet('bh_settings', {}));
@@ -65,8 +72,8 @@
     BH.rate = parseInt(s.rate, 10) || 50;
     BH.grace = parseInt(s.grace_minutes, 10);
     if (isNaN(BH.grace)) { BH.grace = 5; }
+    if (BH.applyIcons) { BH.applyIcons(); }
   };
-  BH.applySettings();
 
   BH.loadSettings = function () {
     if (!BH.sb) { return Promise.resolve(BH.settings); }
@@ -129,7 +136,7 @@
   BH.homeFor = homeFor;
 
   BH.getProfile = function (uid) {
-    return BH.sb.from('profiles').select('id,email,display_name,phone,stand_name,role,active').eq('id', uid).maybeSingle()
+    return BH.sb.from('profiles').select('id,email,display_name,phone,stand_name,stand_id,role,active').eq('id', uid).maybeSingle()
       .then(function (r) { return r.error ? { error: r.error } : { data: r.data }; }, function (e) { return { error: e }; });
   };
 
@@ -183,15 +190,20 @@
     var s = BH.settings, nav = '';
     if (mode === 'public') {
       var me = lsGet('bh_me', null);
-      if (s.booking_enabled === '1') { nav += '<a href="book.html">Book a bike</a>'; }
       nav += me ? '<a href="' + homeFor(me.role) + '">Staff area</a>' : '<a href="login.html">Staff login</a>';
     } else if (BH.me) {
       nav += '<a href="' + homeFor(BH.me.role) + '">' + (BH.me.role === 'admin' ? 'Admin' : 'Bikes') + '</a>'
         + '<a href="account.html">Account</a><button class="linkbtn" type="button" id="logoutBtn">Log out</button>';
     }
+    var note = '';
+    if (mode === 'public' && String(s.header_note || '').trim()) {
+      var nl = BH.safeLink(s.header_note_link);
+      note = '<div class="hnote">' + (nl ? '<a href="' + BH.esc(nl) + '"' + (/^https?:/i.test(nl) ? ' target="_blank" rel="noopener"' : '') + '>' : '<span>')
+        + BH.esc(String(s.header_note).slice(0, 160)) + (nl ? '</a>' : '</span>') + '</div>';
+    }
     el.className = 'topbar';
     el.innerHTML = '<div class="topbar-in"><a class="brand" href="index.html">' + BH.logoHtml() + '<span>' + BH.esc(s.business_name) + '</span></a>'
-      + '<nav class="topnav">' + nav + '</nav></div>';
+      + '<nav class="topnav">' + nav + '</nav></div>' + note;
     var lb = document.getElementById('logoutBtn');
     if (lb) {
       lb.addEventListener('click', function () {
@@ -237,6 +249,123 @@
       BH.loadSettings().then(function () { BH.renderTopbar('staff'); });
     });
   };
+
+
+  /* ---------- small shared helpers ---------- */
+  /* What a rental costs at a given moment (whole seconds, same maths as the database).
+     r = { start, due, grace, rate, billing } with times in seconds. */
+  BH.amountFor = function (r, end) {
+    end = Math.floor(end);
+    if (r.billing === 'v2') {
+      var secs = Math.max(0, r.due - r.start) + (end > r.due + r.grace * 60 ? end - r.due : 0);
+      return Math.floor((r.rate * secs * 2 + 3600) / 7200);
+    }
+    var net = Math.max(0, Math.max(0, end - r.start) - r.grace * 60);
+    return Math.max(1, Math.ceil(net / 3600)) * r.rate;
+  };
+  BH.baseFor = function (r) { return BH.amountFor(r, r.due); };
+  BH.bookedPrice = function (rate, minutes) { return Math.floor((rate * minutes * 60 * 2 + 3600) / 7200); };
+
+  BH.distKm = function (lat1, lng1, lat2, lng2) {
+    var R = 6371, rad = Math.PI / 180;
+    var dLat = (lat2 - lat1) * rad, dLng = (lng2 - lng1) * rad;
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * rad) * Math.cos(lat2 * rad) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+  };
+  BH.fmtKm = function (km) { return km < 1 ? Math.max(50, Math.round(km * 1000 / 50) * 50) + ' m' : km.toFixed(km < 10 ? 1 : 0) + ' km'; };
+  /* a phone number the way WhatsApp wants it (Kenya numbers like 0712 345 678 become 254712345678) */
+  BH.waNumber = function (phone) {
+    var d = String(phone || '').replace(/\D/g, '');
+    if (!d) { return ''; }
+    if (d.indexOf('00') === 0) { d = d.slice(2); }
+    if (d.charAt(0) === '0') { d = '254' + d.slice(1); }
+    else if (/^[17]\d{8}$/.test(d)) { d = '254' + d; }
+    return d.length >= 10 && d.length <= 15 ? d : '';
+  };
+  /* find latitude and longitude inside a long Google Maps link or typed "lat, lng" */
+  BH.parseMapLink = function (txt) {
+    txt = String(txt || '').trim();
+    var m = /^\s*(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/.exec(txt)
+      || /@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/.exec(txt)
+      || /!3d(-?\d{1,2}\.\d+)!4d(-?\d{1,3}\.\d+)/.exec(txt)
+      || /[?&](?:q|ll|query|destination)=(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)/.exec(txt);
+    if (!m) { return null; }
+    var lat = parseFloat(m[1]), lng = parseFloat(m[2]);
+    return (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) ? { lat: lat, lng: lng } : null;
+  };
+  BH.mapsLink = function (lat, lng, label) {
+    if (lat != null && lng != null) { return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(lat + ',' + lng); }
+    return label ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(label) : '';
+  };
+
+  /* ---------- logo as the phone icon, and "install on this phone" ---------- */
+  var iconKey = '';
+  BH.applyIcons = function () {
+    var s = BH.settings, logo = s.logo_path ? BH.publicUrl('site-media', s.logo_path) : '';
+    var key = [logo, s.business_name, s.color_header, s.color_primary].join('|');
+    if (key === iconKey) { return; }
+    iconKey = key;
+    function get(rel) {
+      var l = document.querySelector('link[rel="' + rel + '"]');
+      if (!l) { l = document.createElement('link'); l.rel = rel; document.head.appendChild(l); }
+      return l;
+    }
+    var ic = get('icon'), ap = get('apple-touch-icon'), mf = get('manifest');
+    if (!ic.getAttribute('data-orig')) { ic.setAttribute('data-orig', ic.getAttribute('href') || 'favicon.svg'); }
+    if (!ap.getAttribute('data-orig')) { ap.setAttribute('data-orig', ap.getAttribute('href') || 'apple-touch-icon.png'); }
+    if (!mf.getAttribute('data-orig')) { mf.setAttribute('data-orig', mf.getAttribute('href') || 'manifest.webmanifest'); }
+    if (!logo) {
+      ic.setAttribute('href', ic.getAttribute('data-orig')); ic.setAttribute('type', 'image/svg+xml');
+      ap.setAttribute('href', ap.getAttribute('data-orig'));
+      mf.setAttribute('href', mf.getAttribute('data-orig'));
+      return;
+    }
+    var ext = (/\.([a-z0-9]+)$/i.exec(s.logo_path) || [0, 'png'])[1].toLowerCase();
+    var type = ext === 'svg' ? 'image/svg+xml' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'webp' ? 'image/webp' : ext === 'gif' ? 'image/gif' : 'image/png';
+    ic.setAttribute('href', logo); ic.setAttribute('type', type);
+    ap.setAttribute('href', logo);
+    try {
+      var theme = /^#[0-9a-f]{6}$/i.test(s.color_header || '') ? s.color_header : (/^#[0-9a-f]{6}$/i.test(s.color_primary || '') ? s.color_primary : '#1b3ec9');
+      var icons = ext === 'svg'
+        ? [{ src: logo, sizes: 'any', type: type, purpose: 'any' }]
+        : [{ src: logo, sizes: '192x192', type: type, purpose: 'any' }, { src: logo, sizes: '512x512', type: type, purpose: 'any' }];
+      var start = location.origin + location.pathname;
+      var man = { name: s.business_name, short_name: String(s.business_name).slice(0, 14), start_url: start, scope: location.origin + '/',
+        display: 'standalone', background_color: '#ffffff', theme_color: theme, icons: icons };
+      mf.setAttribute('href', URL.createObjectURL(new Blob([JSON.stringify(man)], { type: 'application/manifest+json' })));
+    } catch (e) { /* keep the ready-made manifest */ }
+  };
+
+  BH.installEvt = null;
+  window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); BH.installEvt = e; if (BH.onInstallable) { BH.onInstallable(); } });
+  window.addEventListener('appinstalled', function () { BH.installEvt = null; if (BH.onInstallable) { BH.onInstallable(); } });
+  BH.isStandalone = function () {
+    return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+  };
+  /* fills a box with the right "install" help for this phone */
+  BH.installBox = function (el) {
+    if (!el) { return; }
+    function draw() {
+      if (BH.isStandalone()) { el.innerHTML = '<p class="muted small">This is already installed on your phone.</p>'; return; }
+      if (BH.installEvt) {
+        el.innerHTML = '<button type="button" class="btn primary" id="doInstall">Install on this phone</button>';
+        el.querySelector('#doInstall').addEventListener('click', function () {
+          var ev = BH.installEvt; if (!ev) { return; }
+          ev.prompt();
+          ev.userChoice.then(function () { BH.installEvt = null; draw(); }, function () { /* ignore */ });
+        });
+        return;
+      }
+      var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+      el.innerHTML = '<p class="muted small">' + (ios
+        ? 'On iPhone: tap the Share button in Safari, then <b>Add to Home Screen</b>.'
+        : 'Open your browser menu (the three dots) and choose <b>Install app</b> or <b>Add to Home screen</b>.') + '</p>';
+    }
+    draw();
+    BH.onInstallable = draw;
+  };
+
+  BH.applySettings();
 
   /* ---------- works offline: remember the pages ---------- */
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {

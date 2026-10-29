@@ -1,9 +1,10 @@
 /* Keeps the staff pages working when the internet drops. */
-var VERSION = 'bh-v1';
+var VERSION = 'bh-v2';
 var CDN = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
 var CORE = ['index.html', 'dashboard.html', 'admin.html', 'login.html', 'account.html', 'book.html', 'status.html',
   'style.css', 'config.js', 'theme-early.js', 'common.js', 'backend.js', 'app.js', 'dashboard.js', 'admin.js',
-  'site.js', 'book.js', 'status.js', 'auth.js', 'favicon.svg'];
+  'site.js', 'book.js', 'status.js', 'auth.js', 'pdf.js', 'popup.js', 'favicon.svg', 'manifest.webmanifest',
+  'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', function (e) {
   e.waitUntil(caches.open(VERSION).then(function (c) {
@@ -26,14 +27,18 @@ self.addEventListener('fetch', function (e) {
     return;
   }
   if (!sameOrigin) { return; } // database and photos always go to the network
-  e.respondWith(
-    fetch(req).then(function (res) {
-      if (res && res.ok) { var copy = res.clone(); caches.open(VERSION).then(function (c) { c.put(req, copy); }); }
-      return res;
-    }).catch(function () {
-      return caches.match(req, { ignoreSearch: true }).then(function (hit) {
-        return hit || caches.match(url.pathname.replace(/\/$/, '') + '.html') || caches.match('index.html');
-      });
-    })
-  );
+  /* network first, but on a weak connection give up after 2.5 seconds and use the saved copy so pages open fast */
+  function fromCache() {
+    return caches.match(req, { ignoreSearch: true }).then(function (hit) {
+      return hit || caches.match(url.pathname.replace(/\/$/, '') + '.html') || caches.match('index.html');
+    });
+  }
+  var net = fetch(req).then(function (res) {
+    if (res && res.ok) { var copy = res.clone(); caches.open(VERSION).then(function (c) { c.put(req, copy); }); }
+    return res;
+  });
+  var timeout = new Promise(function (resolve) {
+    setTimeout(function () { fromCache().then(function (hit) { if (hit) { resolve(hit); } }); }, 2500);
+  });
+  e.respondWith(Promise.race([net, timeout]).catch(fromCache));
 });

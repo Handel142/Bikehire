@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#1b3ec9">
 <title>Master admin</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 <script src="theme-early.js"></script>
 </head>
@@ -19,6 +21,7 @@
     <button type="button" class="tab" role="tab" data-tab="req" aria-selected="false">Requests</button>
     <button type="button" class="tab" role="tab" data-tab="ops" aria-selected="false">Operators</button>
     <button type="button" class="tab" role="tab" data-tab="hist" aria-selected="false">History</button>
+    <button type="button" class="tab" role="tab" data-tab="rep" aria-selected="false">Reports</button>
     <button type="button" class="tab" role="tab" data-tab="web" aria-selected="false">Website</button>
     <button type="button" class="tab" role="tab" data-tab="set" aria-selected="false">Settings</button>
   </div>
@@ -28,6 +31,11 @@
   <section id="p-req" hidden><p class="muted small">Booking requests from students, from all pick-up points.</p><div id="reqList"></div></section>
 
   <section id="p-ops" hidden>
+    <section class="panel">
+      <div class="row between"><h2>Pick-up points</h2><button class="btn primary small" type="button" id="newStand">Add a pick-up point</button></div>
+      <p class="muted small">Each pick-up point has its own bikes and its own price. Operators who share a pick-up point share its bikes, so two phones never lease the same bike twice.</p>
+      <div id="standList"></div>
+    </section>
     <form class="panel" id="opForm" autocomplete="off">
       <h2>Register an operator</h2>
       <p class="muted">Operators lease out the bikes. Give them the email and password you set here.</p>
@@ -36,7 +44,8 @@
         <label>Name<input name="display_name" maxlength="60" required></label>
         <label>Email (they log in with it)<input name="email" type="email" autocapitalize="none" required></label>
         <label>Phone (optional)<input name="phone" type="tel" inputmode="tel" maxlength="20"></label>
-        <label>Pick-up name shown to students (optional)<input name="stand" maxlength="60" placeholder="For example: Main gate"></label>
+        <label>Pick-up point<select name="stand_id" id="opStand"></select></label>
+        <label id="newStandRow" hidden>Name of the new pick-up point<input name="new_stand" maxlength="60" placeholder="For example: Main gate"></label>
         <label>Password (at least 8 characters)<input name="password" type="text" minlength="8" autocomplete="off" required></label>
       </div>
       <button class="btn primary" type="submit">Register operator</button>
@@ -47,6 +56,17 @@
 
   <section id="p-hist" hidden></section>
 
+  <section id="p-rep" hidden>
+    <section class="panel">
+      <h2>Takings report</h2>
+      <div class="chips" id="repChips"><button type="button" class="chip" data-r="today">Today</button><button type="button" class="chip" data-r="week">Last 7 days</button><button type="button" class="chip" data-r="month" aria-pressed="true">This month</button></div>
+      <div class="fgrid"><label>From<input type="date" id="repFrom"></label><label>To<input type="date" id="repTo"></label></div>
+      <button class="btn primary" type="button" id="repGo">Show report</button>
+      <p class="err" id="repErr" role="alert" hidden></p>
+      <div id="repOut"></div>
+    </section>
+  </section>
+
   <section id="p-web" hidden><p class="muted">Loading...</p></section>
 
   <section id="p-set" hidden>
@@ -55,14 +75,15 @@
       <div class="fgrid">
         <label>Business name<input name="business_name" maxlength="60" required></label>
         <label>Currency label<input name="currency" maxlength="8" required></label>
-        <label>Price per hour<input name="rate" type="number" min="1" max="100000" step="1" required></label>
-        <label>Grace minutes before an extra hour is charged<input name="grace_minutes" type="number" min="0" max="60" step="1" required></label>
+        <label>Standard price per hour<input name="rate" type="number" min="1" max="100000" step="1" required></label>
+        <label>Grace minutes before overtime is charged<input name="grace_minutes" type="number" min="0" max="60" step="1" required></label>
         <label>Time zone<input name="timezone" required placeholder="Africa/Nairobi"></label>
       </div>
-      <p class="muted small">A new price applies to bikes leased from now on. Rentals already out keep the price they started with.</p>
+      <p class="muted small">The standard price is used by every pick-up point that has not set its own price (operators can set their own, or you can set it under Operators). A new price applies to bikes leased from now on; rentals already out keep theirs. The price is per hour. A student pays for the time booked, even if they return early. If they keep the bike past the grace minutes, the time overdue is added at the same hourly rate, worked out to the minute and rounded to the nearest shilling.</p>
       <p class="err" id="setErr" role="alert" hidden></p>
       <button class="btn primary" type="submit">Save settings</button>
     </form>
+    <div id="setExtra"></div>
   </section>
 </main>
 <div id="toasts" aria-live="polite"></div>
@@ -71,6 +92,8 @@
 <script src="config.js"></script>
 <script src="common.js"></script>
 <script src="backend.js"></script>
+<script src="pdf.js"></script>
+<script src="popup.js"></script>
 <script src="app.js"></script>
 <script src="admin.js"></script>
 </body>

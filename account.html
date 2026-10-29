@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#1b3ec9">
 <title>Account</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 <script src="theme-early.js"></script>
 </head>
@@ -23,6 +25,7 @@
     <label>Repeat new password<input name="new2" type="password" autocomplete="new-password" required></label>
     <button class="btn primary" type="submit">Change password</button>
   </form>
+  <section class="panel"><h2>Put it on your phone</h2><p class="muted small">Opens like an app and loads faster.</p><div id="installBox"></div></section>
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>

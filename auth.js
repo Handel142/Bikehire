@@ -74,6 +74,7 @@
   }
 
   /* ---------- account ---------- */
+  if ($('installBox')) { BH.installBox($('installBox')); }
   if ($('pwForm')) {
     BH.requireRole(null).then(function (me) {
       BH.renderTopbar('staff');

@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#1b3ec9">
 <title>Bikes</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 <script src="theme-early.js"></script>
 </head>
@@ -15,6 +17,8 @@
   <h1 id="hello">Bikes</h1>
   <p class="clock" id="clock"></p>
   <div class="netbar" id="netbar" hidden></div>
+  <div class="standline" id="standLine" hidden></div>
+  <section class="parked" id="parked" hidden></section>
   <section class="stats" id="stats" aria-label="Summary"></section>
   <div class="alert" id="alert" role="alert" hidden></div>
   <div class="toolbar">
@@ -32,6 +36,7 @@
 <script src="config.js"></script>
 <script src="common.js"></script>
 <script src="backend.js"></script>
+<script src="pdf.js"></script>
 <script src="app.js"></script>
 <script src="dashboard.js"></script>
 </body>

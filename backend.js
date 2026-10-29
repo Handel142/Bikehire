@@ -34,17 +34,30 @@
     if (/^(PGRST30[0-9]|401|403)$/.test(String(code || '')) || (AUTH_RE.test(msg) && !/violates/i.test(msg))) { return { kind: 'auth', error: msg }; }
     var m = /^REG_ACTIVE:(.*)$/.exec(msg);
     if (m) { return { kind: 'fail', confirm: true, error: m[1] }; }
+    var bz = /^BIKE_BUSY:(.*)$/.exec(msg);
+    if (bz) { return { kind: 'fail', busy: true, error: bz[1] }; }
     return { kind: 'fail', error: msg || 'Something went wrong. Try again.' };
   }
-  function rpc(name, args) {
-    return sb.rpc(name, args || {}).then(function (r) {
-      if (r.error) { return classify(r.error); }
-      return { kind: 'done', res: r.data };
-    }, function (e) { return classify(e); });
+  /* One call to the database. If the connection is "on" but nothing comes back (weak signal),
+     we stop waiting after a while and treat it as offline, so the screen never hangs. */
+  function rpc(name, args, ms) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var t = setTimeout(function () { if (!done) { done = true; resolve({ kind: 'net' }); } }, ms || 15000);
+      sb.rpc(name, args || {}).then(function (r) {
+        if (done) { return; }
+        done = true; clearTimeout(t);
+        resolve(r.error ? classify(r.error) : { kind: 'done', res: r.data });
+      }, function (e) {
+        if (done) { return; }
+        done = true; clearTimeout(t);
+        resolve(classify(e));
+      });
+    });
   }
   function offlineErr() { return { error: 'No connection. Check your internet and try again.', offline: true }; }
-  function direct(name, args, shape) {
-    return rpc(name, args).then(function (x) {
+  function direct(name, args, shape, ms) {
+    return rpc(name, args, ms).then(function (x) {
       if (x.kind === 'done') { return shape ? shape(x.res) : (x.res && typeof x.res === 'object' ? Object.assign({ ok: true }, x.res) : { ok: true }); }
       if (x.kind === 'net') { return offlineErr(); }
       if (x.kind === 'auth') { return { error: 'Please log in again.', auth: true }; }
@@ -96,10 +109,10 @@
     mem = mem.filter(function (x) { return x.qid !== qid; });
     return Promise.resolve();
   }
-  function myQueue() {
+  function myQueue(withParked) {
     return qAll().then(function (all) {
       var uid = BH.me && BH.me.id;
-      return all.filter(function (x) { return x.uid === uid; }).sort(function (a, b) { return a.qid - b.qid; });
+      return all.filter(function (x) { return x.uid === uid && (withParked || !x.parked); }).sort(function (a, b) { return a.qid - b.qid; });
     });
   }
 
@@ -164,7 +177,12 @@
         return runItem(it).then(function (x) {
           if (x.kind === 'done') { results[it.qid] = x.res; return qDel(it.qid).then(next); }
           if (x.kind === 'fail') {
-            results[it.qid] = { error: x.error, confirm: !!x.confirm, failed: true };
+            results[it.qid] = { error: x.error, confirm: !!x.confirm, busy: !!x.busy, failed: true };
+            if (it.type === 'lease') {
+              // a lease that could not be sent is kept (with its photo) so nothing is lost: the operator decides
+              it.parked = { error: x.error, confirm: !!x.confirm, busy: !!x.busy, at: Date.now() };
+              return qPut(it).then(next);
+            }
             return qDel(it.qid).then(next);
           }
           stopped = x.kind; // 'net' or 'auth': keep everything and stop here
@@ -183,7 +201,7 @@
     return flush().then(function (f) {
       var n = 0, errs = [];
       Object.keys(f.results).forEach(function (k) { var r = f.results[k]; if (r && r.failed) { errs.push(r.error); } else { n++; } });
-      return { synced: n, errors: errs, stopped: f.stopped };
+      return { synced: n, errors: errs, stopped: f.stopped, parked: errs.length };
     });
   };
 
@@ -199,7 +217,9 @@
   /* Save an operator action, try to send it now, report what happened. */
   function act(type, data, blob, queuedAnswer, shape) {
     var it = { type: type, data: data, uid: BH.me.id, at: Date.now(), blob: blob || null };
+    var myQid = null;
     return qAdd(it).then(function (qid) {
+      myQid = qid;
       return refreshCount().then(function () {
         if (navigator.onLine === false) { return { done: false, stopped: 'net' }; }
         return settle(qid, 0);
@@ -210,7 +230,12 @@
         return Object.assign({ ok: true, queued: true }, queuedAnswer || {});
       }
       var r = s.res;
-      if (r && r.error) { return { error: r.error, confirm: !!r.confirm }; }
+      if (r && r.error) {
+        // the screen shows this error right now, so the item is not kept in the "could not send" list
+        return (type === 'lease' && myQid != null ? qDel(myQid) : Promise.resolve()).then(refreshCount).then(function () {
+          return { error: r.error, confirm: !!r.confirm, busy: !!r.busy };
+        });
+      }
       return shape ? shape(r) : Object.assign({ ok: true }, r || {});
     });
   }
@@ -223,29 +248,26 @@
     if (!localPhotos[it.qid]) { try { localPhotos[it.qid] = URL.createObjectURL(it.blob); } catch (e) { return ''; } }
     return localPhotos[it.qid];
   }
-  function billableLocal(start, end, grace) {
-    var net = Math.max(0, Math.max(0, end - start) - grace * 60);
-    return Math.max(1, Math.ceil(net / 3600));
-  }
-
   function overlay(st, queue) {
     st = JSON.parse(JSON.stringify(st));
     function bikeBy(id) { for (var i = 0; i < st.bikes.length; i++) { if (st.bikes[i].id === id) { return st.bikes[i]; } } return null; }
     function bikeByNum(n) { for (var i = 0; i < st.bikes.length; i++) { if (String(st.bikes[i].number).toLowerCase() === String(n).toLowerCase()) { return st.bikes[i]; } } return null; }
     function rentalBy(id) { for (var i = 0; i < st.bikes.length; i++) { if (st.bikes[i].rental && st.bikes[i].rental.id === id) { return st.bikes[i]; } } return null; }
+    var standRate = (st.stand && st.stand.rate) || BH.rate;
     queue.forEach(function (it) {
       var d = it.data, b;
       if (it.type === 'add_bike') {
-        d.numbers.forEach(function (n) { if (!bikeByNum(n)) { st.bikes.push({ id: 'tmp-' + n, number: n, note: '', rental: null, pending: true }); } });
+        d.numbers.forEach(function (n) { if (!bikeByNum(n)) { st.bikes.push({ id: 'tmp-' + n, number: n, note: '', out_of_service: false, service_note: '', rental: null, pending: true }); } });
       } else if (it.type === 'remove_bike') {
         st.bikes = st.bikes.filter(function (x) { return x.id !== d.bike_id || x.rental; });
       } else if (it.type === 'lease') {
         b = bikeBy(d.bike_id) || bikeByNum(d.bike_number);
-        if (b && !b.rental) {
+        if (b && !b.rental && !b.out_of_service) {
           b.rental = {
             id: d.id, bike_id: b.id, bike: b.number, name: d.name, reg: d.reg, phone: d.phone || '',
             photo: localPhoto(it), has_photo: true, start: d.start, due: d.start + d.minutes * 60, returned: null,
-            minutes: d.minutes, rate: BH.rate, grace: BH.grace, amount: null, operator: BH.me.display_name, pending: true
+            minutes: d.minutes, rate: standRate, grace: BH.grace, amount: null, billing: 'v2', operator: BH.me.display_name,
+            stand: (st.stand && st.stand.name) || '', pending: true
           };
           st.today.leases++;
         }
@@ -255,7 +277,7 @@
         if (b) {
           var r = b.rental;
           st.today.returned++;
-          st.today.earned += billableLocal(r.start, d.at, r.grace) * r.rate;
+          st.today.earned += BH.amountFor(r, d.at);
           b.rental = null;
         }
       } else if (it.type === 'extend') {
@@ -269,12 +291,23 @@
     return st;
   }
 
+  /* the last screen we saw, shown instantly while the fresh one is fetched */
+  function cachedState() {
+    return myQueue().then(function (queue) {
+      var cached = BH.lsGet(stateKey(), null);
+      if (!cached || !cached.bikes) { return { error: 'none' }; }
+      var o = overlay(cached, queue);
+      o.ok = true; o.pending = queue.length; o.offline = true; o.cached = true; o.now = Date.now() / 1000;
+      return o;
+    });
+  }
+
   function loadState() {
     return refreshCount().then(function () { return myQueue(); }).then(function (queue) {
       var pre = queue.length && navigator.onLine !== false ? flush().then(myQueue) : Promise.resolve(queue);
       return pre;
     }).then(function (queue) {
-      return rpc('operator_state').then(function (x) {
+      return rpc('operator_state', {}, 12000).then(function (x) {
         if (x.kind === 'done') {
           BH.lsSet(stateKey(), x.res);
           var out = overlay(x.res, queue);
@@ -283,7 +316,7 @@
         }
         var cached = BH.lsGet(stateKey(), null);
         if (x.kind === 'auth') { return { error: 'Please log in again.', auth: true }; }
-        if (x.kind === 'net' && cached) {
+        if (x.kind === 'net' && cached && cached.bikes) {
           var o = overlay(cached, queue);
           o.ok = true; o.pending = queue.length; o.offline = true; o.now = Date.now() / 1000;
           return o;
@@ -293,6 +326,36 @@
     });
   }
 
+  /* ---------- leases that could not be sent (kept safe on this phone) ---------- */
+  BH.parkedList = function () {
+    return myQueue(true).then(function (all) {
+      return all.filter(function (x) { return x.parked; }).map(function (it) {
+        return { qid: it.qid, name: it.data.name, reg: it.data.reg, bike: it.data.bike_number, minutes: it.data.minutes,
+          start: it.data.start, error: it.parked.error, confirm: !!it.parked.confirm, busy: !!it.parked.busy, photo: localPhoto(it) };
+      });
+    });
+  };
+  BH.retryParked = function (qid, force) {
+    return myQueue(true).then(function (all) {
+      var it = all.filter(function (x) { return x.qid === qid; })[0];
+      if (!it) { return { error: 'That item is gone.' }; }
+      if (force) { it.data.force = true; }
+      delete it.parked;
+      return qPut(it).then(function () { return refreshCount(); }).then(function () { return settle(qid, 0); }).then(function (s) {
+        if (!s.done) { return { ok: true, queued: true }; }
+        var r = s.res;
+        if (r && r.error) {
+          return myQueue(true).then(function (all2) {
+            var again = all2.filter(function (x) { return x.qid === qid; })[0];
+            return { error: r.error, confirm: !!r.confirm, busy: !!r.busy, parked: !!again };
+          });
+        }
+        return { ok: true };
+      });
+    });
+  };
+  BH.discardParked = function (qid) { return qDel(qid).then(refreshCount); };
+
   /* ---------- public entry point ---------- */
   function mapDirect(res) { return Object.assign({ ok: true }, res || {}); }
 
@@ -301,6 +364,7 @@
     var b = opts.body || {}, p = opts.params || {};
     switch (action) {
       case 'state': return loadState();
+      case 'cached_state': return cachedState();
 
       case 'lease': {
         var data = {
@@ -320,16 +384,34 @@
         return act('add_bike', { numbers: nums }, null, { added: nums.length, skipped: 0 });
       }
       case 'remove_bike': return act('remove_bike', { bike_id: b.bike_id, bike_number: b.bike_number }, null, {});
+      case 'set_service': return direct('set_bike_service', { p_bike: b.bike_id, p_out: !!b.out, p_note: b.note || '' });
+      case 'update_stand':
+        return direct('update_my_stand', { p_name: b.name, p_rate: b.rate == null ? null : b.rate, p_lat: b.lat == null ? null : b.lat,
+          p_lng: b.lng == null ? null : b.lng, p_address: b.address || '' });
+      case 'reg_flag':
+        return direct('reg_flag', { p_reg: b.reg }, function (res) { return { ok: true, note: res || '' }; }, 8000);
 
       case 'history':
-        return direct('history_search', { p_q: p.q || '', p_status: p.status || 'all', p_limit: +p.limit || 30, p_offset: +p.offset || 0 });
+        return direct('history_search', { p_q: p.q || '', p_status: p.status || 'all', p_limit: +p.limit || 30, p_offset: +p.offset || 0,
+          p_from: p.from ? iso(p.from) : null, p_to: p.to ? iso(p.to) : null });
       case 'export':
-        return direct('history_search', { p_q: '', p_status: 'all', p_limit: 5000, p_offset: 0 });
+        return direct('history_search', { p_q: '', p_status: 'all', p_limit: 5000, p_offset: 0,
+          p_from: p.from ? iso(p.from) : null, p_to: p.to ? iso(p.to) : null }, null, 90000);
 
       case 'overview': return direct('admin_overview', {});
       case 'toggle_operator': return direct('admin_toggle_operator', { p_user: b.id, p_active: !!b.active });
       case 'reset_password': return direct('admin_set_password', { p_user: b.id, p_password: b.password });
-      case 'update_operator': return direct('admin_update_operator', { p_user: b.id, p_name: b.name, p_phone: b.phone || '', p_stand: b.stand || '' });
+      case 'update_operator': return direct('admin_update_operator', { p_user: b.id, p_name: b.name, p_phone: b.phone || '', p_stand_id: b.stand_id });
+      case 'save_stand':
+        return direct('admin_save_stand', { p_id: b.id || null, p_name: b.name, p_rate: b.rate == null ? null : b.rate, p_lat: b.lat == null ? null : b.lat,
+          p_lng: b.lng == null ? null : b.lng, p_address: b.address || '', p_active: b.active !== false });
+      case 'flags': return direct('admin_flags', {}, function (res) { return { ok: true, flags: res || [] }; });
+      case 'add_flag': return direct('admin_add_flag', { p_reg: b.reg, p_note: b.note });
+      case 'remove_flag': return direct('admin_remove_flag', { p_id: b.id });
+      case 'report': return direct('admin_report', { p_from: b.from, p_to: b.to });
+      case 'purge_preview': return direct('admin_purge_preview', { p_before: b.before, p_mode: b.mode });
+      case 'purge': return direct('admin_purge', { p_before: b.before, p_mode: b.mode, p_confirm: b.confirm }, null, 60000);
+      case 'audit': return direct('admin_audit', {}, function (res) { return { ok: true, items: res || [] }; });
       case 'decide': return direct('decide_booking', { p_id: b.id, p_decision: b.decision, p_message: b.message || '', p_bike: b.bike || '' });
 
       case 'create_operator': return createOperator(b);
@@ -350,7 +432,7 @@
   function createOperator(b) {
     var email = String(b.email || '').trim().toLowerCase();
     if (String(b.password || '').length < 8) { return Promise.resolve({ error: 'Password must be at least 8 characters.' }); }
-    return rpc('create_invite', { p_email: email, p_name: b.display_name, p_phone: b.phone || '', p_stand: b.stand || '' }).then(function (x) {
+    return rpc('create_invite', { p_email: email, p_name: b.display_name, p_phone: b.phone || '', p_stand_id: b.stand_id || null, p_new_stand: b.new_stand || '' }).then(function (x) {
       if (x.kind === 'net') { return offlineErr(); }
       if (x.kind !== 'done') { return { error: x.error || 'Could not register this operator.' }; }
       var cfg = window.BH_CONFIG;

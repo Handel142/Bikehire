@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#1b3ec9">
 <title>Bicycle hire</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 <script src="theme-early.js"></script>
 </head>
@@ -16,12 +18,17 @@
     <div>
       <h1 id="heroTitle">Grab a bike.<br>Ride by the hour.</h1>
       <p id="heroText">Quick bicycle hire for students. Pick a bike, ride, and bring it back on time.</p>
-      <a class="btn primary" id="bookBtn" href="book.html" hidden>Book a bike</a>
-      <a class="btn outline" id="callBtn" href="#" hidden>Call</a>
-      <a class="btn outline" href="#how">How it works</a>
+      <div class="hero-btns">
+        <a class="btn primary" id="bookBtn" href="book.html" hidden>Book a bike</a>
+        <a class="btn outline" id="findBtn" href="#finder" hidden>Find bikes near me</a>
+        <a class="btn outline" href="status.html">Check my request</a>
+        <a class="btn outline" id="callBtn" href="#" hidden>Call</a>
+        <a class="btn outline" href="#how">How it works</a>
+      </div>
     </div>
-    <div class="hero-art">
+    <div class="hero-art" id="heroArt">
       <div class="tag" id="priceTag"><b>KSh 50</b><span>per hour</span></div>
+      <img class="hero-img" id="heroImg" alt="" hidden>
       <svg class="bike-art" viewBox="0 0 640 340" role="img" aria-label="Illustration of a bicycle">
         <g fill="none" stroke-linecap="round" stroke-linejoin="round">
           <g class="spokes" stroke-width="2">
@@ -45,6 +52,15 @@
   </div>
 </section>
 
+<section class="section" id="finder" hidden>
+  <h2 id="finderTitle">Find bikes near you</h2>
+  <p class="muted" id="finderIntro">Tap the button and we will show the closest pick-up points first.</p>
+  <div class="chips"><button class="btn primary" type="button" id="nearBtn">Find bikes near me</button></div>
+  <p class="muted small" id="nearMsg" role="status"></p>
+  <div class="finder-list" id="standCards"></div>
+  <div class="center"><button class="btn" type="button" id="standMore" hidden>View all pick-up points</button></div>
+</section>
+
 <section class="section" id="how">
   <h2 id="howTitle">How it works</h2>
   <ol class="steps" id="steps"></ol>
@@ -63,6 +79,12 @@
   </div>
 </section>
 
+<section class="section" id="svcSec" hidden style="padding-top:0">
+  <h2 id="svcTitle">Other things we offer</h2>
+  <p class="muted" id="svcIntro" hidden></p>
+  <div class="news-grid" id="svcGrid"></div>
+</section>
+
 <section class="section" id="where" style="padding-top:0" hidden>
   <h2>Find us</h2>
   <div class="where" id="whereBox"></div>
@@ -70,14 +92,20 @@
 
 <footer class="footer">
   <div class="section">
-    <div id="footInfo"></div>
-    <p><a href="login.html">Staff login</a></p>
+    <div class="foot-grid">
+      <div id="footInfo"></div>
+      <div id="footLinks"></div>
+    </div>
+    <div id="footSocial" class="socials"></div>
+    <div id="installBox" class="install"></div>
+    <p class="small"><a href="login.html">Staff login</a></p>
   </div>
 </footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script src="config.js"></script>
 <script src="common.js"></script>
+<script src="popup.js"></script>
 <script src="site.js"></script>
 </body>
 </html>

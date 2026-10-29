@@ -28,7 +28,7 @@
 
   function render(b) {
     var when = dayLabel(b.date) + (b.time ? ' at ' + clock(b.time) : '');
-    var dir = BH.safeLink(b.map_link) || (b.location ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(b.location) : '');
+    var dir = (b.lat != null && b.lng != null ? BH.mapsLink(b.lat, b.lng) : '') || BH.safeLink(b.map_link) || (b.location ? 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(b.location) : '');
     var phone = String(b.stand_phone || '').replace(/[^0-9+]/g, '');
     var html = '';
     if (b.status === 'pending') {
@@ -37,7 +37,8 @@
       html = '<div class="banner approved"><h2>Yes, you are allowed &#10003;</h2><p>You can hire a bike on <b>' + esc(when) + '</b> for ' + esc(dur(b.minutes)) + '.</p>'
         + (b.bike ? '<p>Your bike: <b>Bike ' + esc(b.bike) + '</b></p>' : '')
         + (b.message ? '<p>Message: &ldquo;' + esc(b.message) + '&rdquo;</p>' : '')
-        + '<p>Bring your registration number and come to <b>' + esc(b.stand) + '</b>' + (b.location ? ', ' + esc(b.location) : '') + '.</p></div>';
+        + '<p>Bring your registration number and come to <b>' + esc(b.stand) + '</b>' + (b.location ? ', ' + esc(b.location) : '') + '.</p>'
+        + (b.rate ? '<p>Price: ' + esc(BH.currency + ' ' + b.rate) + ' per hour (' + esc(BH.currency + ' ' + BH.bookedPrice(b.rate, b.minutes)) + ' for your booking).</p>' : '') + '</div>';
     } else if (b.status === 'declined') {
       html = '<div class="banner declined"><h2>Sorry, not this time</h2><p>You were not allowed a bike on ' + esc(when) + '.</p>'
         + (b.message ? '<p>Message: &ldquo;' + esc(b.message) + '&rdquo;</p>' : '') + '<p>You can send a new request for another day.</p></div>';
@@ -87,11 +88,19 @@
   form.addEventListener('submit', function (e) { e.preventDefault(); check(form.elements.code.value); });
 
   var list = BH.lsGet('bh_codes', []);
+  var LABEL = { pending: 'Waiting', approved: 'Approved', declined: 'Declined', cancelled: 'Cancelled', done: 'Done' };
   if (list.length) {
     $('mine').hidden = false;
     $('mineList').innerHTML = list.map(function (x) {
-      return '<li><a href="status.html?code=' + encodeURIComponent(x.code) + '"><span>' + esc(x.name) + '</span><span>' + esc(x.code) + '</span></a></li>';
+      return '<li><a href="status.html?code=' + encodeURIComponent(x.code) + '"><span>' + esc(x.name) + '<small class="muted" data-st="' + esc(x.code) + '"></small></span><span>' + esc(x.code) + '</span></a></li>';
     }).join('');
+    /* show the latest answer next to each saved code */
+    list.slice(0, 6).forEach(function (x) {
+      BH.sb.rpc('booking_status', { p_code: x.code }).then(function (r) {
+        var el = document.querySelector('[data-st="' + x.code + '"]');
+        if (el && r && !r.error && r.data) { el.textContent = ' - ' + (LABEL[r.data.status] || r.data.status); }
+      }, function () { /* offline */ });
+    });
   }
   var q = /[?&]code=([A-Za-z0-9]+)/.exec(location.search);
   var start = q ? q[1] : (list[0] && list[0].code) || '';

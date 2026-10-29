@@ -6,6 +6,8 @@
 <meta name="theme-color" content="#1b3ec9">
 <title>Book a bike</title>
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 <script src="theme-early.js"></script>
 </head>
@@ -32,9 +34,11 @@
       <label>Anything we should know? (optional)<textarea name="note" rows="2" maxlength="300"></textarea></label>
       <div class="hp" aria-hidden="true"><label>Leave this empty<input name="website" tabindex="-1" autocomplete="off"></label></div>
       <p class="err" id="bookErr" role="alert" hidden></p>
+      <p class="muted small" id="bookPrice" role="status"></p>
       <button class="btn primary block" type="submit" id="bookGo">Send my request</button>
       <p class="muted small center" style="margin-top:10px">You do not need an account. After sending, you get a code. Use it to see if you were allowed to have a bike on your day.</p>
     </form>
+    <p class="center small" id="check-answer"><a href="status.html">Already booked? Check my request</a></p>
     <div id="bookDone" hidden>
       <h2>Request sent</h2>
       <p>Save this code. You need it to see the answer.</p>
